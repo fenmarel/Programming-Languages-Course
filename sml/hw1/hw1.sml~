@@ -1,0 +1,9 @@
+fun is_older ( d1 : int*int*int, d2 : int*int*int) =
+    (* roughly calculate days old 
+    not exact days, however accurate for gt lt comparisons *)
+    val days1 = #1 d1 * 365 + #2 d1 * 31 + #3 d1
+    val days2 = #1 d2 * 365 + #2 d2 * 31 + #3 d2
+
+    if days1 < days2
+    then true
+    else false

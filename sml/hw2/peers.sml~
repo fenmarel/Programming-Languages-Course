@@ -1,0 +1,254 @@
+(* Dan Grossman, Coursera PL, HW2 Provided Code *)
+
+(* if you use this function to compare two strings (returns true if the same
+   string), then you avoid several of the functions in problem 1 having
+   polymorphic types that may be confusing *)
+fun same_string(s1 : string, s2 : string) =
+    s1 = s2
+
+(* put your solutions for problem 1 here *)
+
+(* Finds needle in haystack, returns same list as haystack without the needle 
+    ASSUMPTIONS:
+      - If there is an item of type needle in the haystack, it only appears once
+*)
+fun all_except_option(needle, haystack) =
+let
+  fun aux(needle, haystack, searched) =
+    case haystack of
+      [] => NONE
+      | x::rest =>  if same_string(x, needle) then 
+                      SOME(searched @ rest) 
+                    else 
+                      aux(needle, rest, searched @ [x])
+in
+  aux(needle, haystack, [])
+end
+
+(* searches a list of substitution lists for name, returning all substitution lists containing
+   name but excluding name itself
+*)
+fun get_substitutions1(substitutions : string list list, name: string) =
+  case substitutions of
+    [] => [] 
+  |  hd::more => case all_except_option(name, hd) of
+                    NONE => get_substitutions1(more, name) 
+                  | SOME y => y @ get_substitutions1(more, name) 
+               
+(* like get_substitutions1 but uses a tail-recursive helper fn *)
+fun get_substitutions2(substitutions, name) =
+let
+    fun sub_helper(substitutions, name, results) = 
+      case substitutions of
+        [] => results
+      | hd::more => case all_except_option(name, hd) of
+                      NONE => sub_helper(more, name, results) 
+                    | SOME y => sub_helper(more, name, results @ y)
+
+in
+    sub_helper(substitutions, name, [])
+end
+
+
+(* when building up a result, is there a better way than using '@'??? *)
+fun similar_names(substitutions, {first: string, middle: string, last: string}) =
+let
+    val aliases = get_substitutions2(substitutions, first)
+    fun aux([], results) = results
+      | aux(hd::rest, results) = aux(rest, results @ [{first=hd,middle=middle,last=last}])    
+in
+    aux(aliases, [{first=first,middle=middle,last=last}])
+end
+
+(* you may assume that Num is always used with values 2, 3, ..., 10
+   though it will not really come up *)
+datatype suit = Clubs | Diamonds | Hearts | Spades
+datatype rank = Jack | Queen | King | Ace | Num of int 
+type card = suit * rank
+
+datatype color = Red | Black
+datatype move = Discard of card | Draw 
+
+exception IllegalMove
+
+(* put your solutions for problem 2 here *)
+
+fun card_color(c : card) =
+  case c of
+    (Clubs,_) => Black
+  | (Spades,_) => Black
+  | (_,_) => Red
+
+fun card_value(s : suit, r: rank) =
+  case r of
+    Ace => 11
+  | King => 10
+  | Queen => 10
+  | Jack => 10
+  | Num n => n
+
+fun remove_card(cs: card list, c: card, ex: exn) =
+let fun aux(cs,prev) = 
+  case cs of
+    [] => raise ex
+  | hd::rest => if hd = c then 
+                  prev @ rest
+                else 
+                  aux(rest, hd::prev)
+in
+  aux(cs,[])
+end
+
+fun all_same_color(cs: card list) =
+  case cs of
+    [] => true
+  | hd::[] => true
+  | c1::c2::rest => if card_color(c1) = card_color(c2) then 
+                        all_same_color(c2 :: rest) 
+                    else 
+                        false
+
+fun sum_cards(cs: card list) =
+let
+    fun sum_helper(cs: card list, sum: int) =
+      case cs of
+        [] => sum
+      | c::cs' => sum_helper(cs', card_value(c) + sum)
+in
+    sum_helper(cs, 0)
+end
+
+
+(* scores a solitaire game according to the rules laid out in the hw description *)
+fun score(cs : card list, goal: int) =
+let
+      val sum = sum_cards(cs) 
+      val prelim_score = if sum > goal then 3 * (sum - goal) else goal - sum
+in
+      if all_same_color(cs) then
+        prelim_score div 2
+      else
+        prelim_score
+end  
+
+
+(* officiate: plays a sequence of moves against a deck and goal , returns the game score *)
+fun officiate(deck: card list, moves: move list, goal: int) =
+let
+    fun make_move(cards, held_cards, moves) =
+      let
+          val curr_score = score(held_cards, goal)
+      in
+        case (moves,cards) of
+          ([],_) => curr_score (* no more moves, game over *)
+        | (Discard c::remaining_moves, _) => make_move(cards, remove_card(cards, 
+                                                         c, IllegalMove), remaining_moves) 
+        | (Draw::remaining_moves, []) => curr_score
+        | (Draw::remaining_moves, c::remaining_cards) => if sum_cards(held_cards) > goal then 
+                                                            curr_score 
+                                                          else
+                                                            make_move(remaining_cards, c::held_cards, remaining_moves)
+      end
+in
+  make_move(deck, [], moves)
+end
+
+
+
+(* -------------------------------------- *)
+(* ------- CHALLENGE PROBLEMS ----------- *)
+(* -------------------------------------- *)
+
+(* 3a: challenge problem *)
+ 
+fun sum_cards2(cs: card list) =
+let
+    fun card_value2(s : suit, r: rank) =
+      case r of
+        Ace => 1
+        | _ => card_value(s,r)
+
+    fun sum_helper(cs: card list, sum: int) =
+      case cs of
+        [] => sum
+      | c::cs' => sum_helper(cs', card_value2(c) + sum)
+in
+    sum_helper(cs, 0)
+end
+
+(* delegates to sum_cards2 which delegates to card_value2 *)
+fun score_challenge(cards, goal) =
+let
+      (* sum of all the held cards *)
+      val sum = sum_cards2(cards) 
+      
+      (* given a preliminary score, calcs a real score *)
+      fun calc_real_score(prelim_score) =  
+        if all_same_color(cards) then 
+          prelim_score div 2 
+        else prelim_score
+in
+      if sum > goal then
+        calc_real_score(3 * sum - goal)
+      else
+        calc_real_score(goal - sum)
+end  
+
+
+(* same as original except delegates to score_challenge for scoring *)
+fun officiate_challenge(deck, moves, goal) =
+let
+    fun make_move(cards, held_cards, moves) =
+    let
+        val curr_score = score_challenge(held_cards, goal)
+    in
+      case (moves,cards) of
+          ([],_) => curr_score (* no more moves, game over *)
+        | (Discard c::remaining_moves, _) => make_move(cards, remove_card(cards, 
+                                                         c, IllegalMove), remaining_moves) 
+        | (Draw::remaining_moves, []) => curr_score
+        | (Draw::remaining_moves, c::remaining_cards) => if sum_cards(held_cards) > goal then 
+                                                            curr_score 
+                                                          else
+                                                            make_move(remaining_cards, c::held_cards, remaining_moves)
+      end
+in
+  make_move(deck, [], moves)
+end
+
+
+(* looks at every card in the held list to determine if a zero score is possible with a given drawcard *)
+fun card_to_discard(drawcard, held, goal) =
+let 
+    fun zero_possible(todiscard) =
+      score(drawcard :: remove_card(held, todiscard, IllegalMove), goal) = 0
+
+    fun try_discard_next(discards) =
+      case discards of
+        [] => NONE (* exhausing discard possibilities so no *)
+      | hd::rest => if zero_possible(hd) then 
+                    SOME hd
+                  else
+                    try_discard_next(rest)
+in
+  try_discard_next(held)
+end
+
+
+
+
+(* 3b challenge problem *)
+(*fun careful_player(cards: card list, goal: int) =
+let
+  fun pick_next_move(topcard, held) =
+    case topcard of
+      [] => NONE 
+    |  tc => if could_get_zero_on_next_draw(tc, held, goal) then 
+                SOME  
+  end
+
+
+  in
+      body
+  end  
+*)
